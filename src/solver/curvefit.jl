@@ -1,8 +1,12 @@
+# = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = =
+# Simple/Weighted Least Sqaure Type Definition/Operation
+# = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = =
 abstract type AbstractSQ{T}  <: Function      end
 abstract type AbstractLSQ{T} <: AbstractSQ{T} end
 abstract type AbstractχSQ{T} <: AbstractSQ{T} end
 
-function _leastsq!(xdat::Vector{T}, ydat::Vector{T}, params::VT, func::F) where {F, T, VT<:AbstractVector{T}}
+# @code_warntype ✓
+function _lsq!(xdat::Vector{T}, ydat::Vector{T}, params::VT, func::F) where {F, T, VT<:AbstractVector{T}}
     ret = 0.0
 
     @inbounds for i in eachindex(xdat)
@@ -12,7 +16,8 @@ function _leastsq!(xdat::Vector{T}, ydat::Vector{T}, params::VT, func::F) where 
     return ret
 end
 
-function _leastsq!(xdat::Vector{T}, ydat::Vector{T}, xm::MT, jdx::U, func::F) where {F, T, U, MT<:AbstractMatrix{T}}
+# @code_warntype ✓
+function _lsq!(xdat::Vector{T}, ydat::Vector{T}, xm::MT, jdx::U, func::F) where {F, T, U, MT<:AbstractMatrix{T}}
     ret = 0.0
 
     @inbounds for i in eachindex(xdat)
@@ -22,22 +27,58 @@ function _leastsq!(xdat::Vector{T}, ydat::Vector{T}, xm::MT, jdx::U, func::F) wh
     return ret
 end
 
-function _leastsq!(xdat::Vector{T}, ydat::Vector{T}, des::Vector{T}, xm::MT, func::F) where {F, T, MT<:AbstractMatrix{T}}
+# @code_warntype ✓
+function _lsq!(xdat::Vector{T}, ydat::Vector{T}, des::Vector{T}, xm::MT, func::F) where {F, T, MT<:AbstractMatrix{T}}
     @inbounds for jdx in eachindex(des)
-        des[jdx] = _leastsq!(xdat, ydat, xm, jdx, func)
+        des[jdx] = _lsq!(xdat, ydat, xm, jdx, func)
+    end
+end
+
+# @code_warntype ✓
+function _χsq!(xdat::Vector{T}, ydat::Vector{T}, σdat::Vector{T}, params::VT, func::F) where {F, T, VT<:AbstractVector{T}}
+    ret = 0.0
+
+    @inbounds for i in eachindex(xdat)
+        ret += σdat[i] * (ydat[i] - func(xdat[i], params))^2.0
+    end
+
+    return ret
+end
+
+# @code_warntype ✓
+function _χsq!(xdat::Vector{T}, ydat::Vector{T}, σdat::Vector{T}, xm::MT, jdx::U, func::F) where {F, T, U, MT<:AbstractMatrix{T}}
+    ret = 0.0
+
+    @inbounds for i in eachindex(xdat)
+        ret += σdat[i] * (ydat[i] - func(xdat[i], xm, jdx))^2.0
+    end
+
+    return ret
+end
+
+# @code_warntype ✓
+function _χsq!(xdat::Vector{T}, ydat::Vector{T}, σdat::Vector{T}, des::Vector{T}, xm::MT, func::F) where {F, T, MT<:AbstractMatrix{T}}
+    @inbounds for jdx in eachindex(des)
+        des[jdx] = _χsq!(xdat, ydat, σdat, xm, jdx, func)
     end
 end
 
 # = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = =
 # Multi-Exponential Decay LeastSQ
 # = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = =
-struct DecayLSQ{T} <: AbstractLSQ{T} xdat::Vector{T}; ydat::Vector{T} end
+struct DecayLSQ{T} <: AbstractLSQ{T} xdat::Vector{T}; ydat::Vector{T}                  end
+struct DecayχSQ{T} <: AbstractχSQ{T} xdat::Vector{T}; ydat::Vector{T}; σdat::Vector{T} end
 
-decay_fit(xdat::Vector{T}, ydat::Vector{T}, lb::NTuple{ND,T}, ub::NTuple{ND,T}) where {T, ND} = curve_fit(DecayLSQ(xdat, ydat), lb, ub)
+decay_fit(xdat::Vector{T}, ydat::Vector{T},                  lb::NTuple{ND,T}, ub::NTuple{ND,T}) where {T, ND} = curve_fit(DecayLSQ(xdat, ydat),       lb, ub)
+decay_fit(xdat::Vector{T}, ydat::Vector{T}, σdat::Vector{T}, lb::NTuple{ND,T}, ub::NTuple{ND,T}) where {T, ND} = curve_fit(DecayχSQ(xdat, ydat, σdat), lb, ub)
 
-(lsq::DecayLSQ{T})(params::VT)             where {T, VT<:AbstractVector{T}}    = _leastsq!(lsq.xdat, lsq.ydat,  params, _decay)
-(lsq::DecayLSQ{T})(xm::MT, jdx::U)         where {T, U, MT<:AbstractMatrix{T}} = _leastsq!(lsq.xdat, lsq.ydat, xm, jdx, _decay)
-(lsq::DecayLSQ{T})(des::Vector{T}, xm::MT) where {T, MT<:AbstractMatrix{T}}    = _leastsq!(lsq.xdat, lsq.ydat, des, xm, _decay)
+(lsq::DecayLSQ{T})(params::VT)             where {T, VT<:AbstractVector{T}}    = _lsq!(lsq.xdat, lsq.ydat,  params, _decay)
+(lsq::DecayLSQ{T})(xm::MT, jdx::U)         where {T, U, MT<:AbstractMatrix{T}} = _lsq!(lsq.xdat, lsq.ydat, xm, jdx, _decay)
+(lsq::DecayLSQ{T})(des::Vector{T}, xm::MT) where {T, MT<:AbstractMatrix{T}}    = _lsq!(lsq.xdat, lsq.ydat, des, xm, _decay)
+
+(χsq::DecayχSQ{T})(params::VT)             where {T, VT<:AbstractVector{T}}    = _χsq!(χsq.xdat, χsq.ydat, χsq.σdat,  params, _decay)
+(χsq::DecayχSQ{T})(xm::MT, jdx::U)         where {T, U, MT<:AbstractMatrix{T}} = _χsq!(χsq.xdat, χsq.ydat, χsq.σdat, xm, jdx, _decay)
+(χsq::DecayχSQ{T})(des::Vector{T}, xm::MT) where {T, MT<:AbstractMatrix{T}}    = _χsq!(χsq.xdat, χsq.ydat, χsq.σdat, des, xm, _decay)
 
 function _decay(xdat::T, params::VT) where {T, VT<:AbstractVector{T}}
     ret = params[end]
@@ -60,30 +101,44 @@ function _decay(xdat::T, xm::MT, jdx::U) where {T, U, MT<:AbstractMatrix{T}}
 end
 
 # = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = =
-# Guassian LeastSQ
-# = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = =
-struct GuassLSQ{T} <: AbstractLSQ{T} xdat::Vector{T}; ydat::Vector{T} end
+# Gaussian LeastSQ
+# = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = =
+struct GaussLSQ{T} <: AbstractLSQ{T} xdat::Vector{T}; ydat::Vector{T}                  end
+struct GaussχSQ{T} <: AbstractχSQ{T} xdat::Vector{T}; ydat::Vector{T}; σdat::Vector{T} end
 
-function guass_fit(xdat::Vector{T}, ydat::Vector{T}, lb::NTuple{ND,T}, ub::NTuple{ND,T}) where {T, ND}
+function gauss_fit(xdat::Vector{T}, ydat::Vector{T}, lb::NTuple{ND,T}, ub::NTuple{ND,T}) where {T, ND}
     if ND ≠ 4
-        return error("Invalid boundary dimension (4 for Guassian distribution).")
+        return error("Invalid boundary dimension (4 for Gaussian distribution).")
     end
 
-    return curve_fit(GuassLSQ(xdat, ydat), lb, ub)
+    return curve_fit(GaussLSQ(xdat, ydat), lb, ub)
 end
 
-(lsq::GuassLSQ{T})(params::VT)             where {T, VT<:AbstractVector{T}}    = _leastsq!(lsq.xdat, lsq.ydat,  params, _guass)
-(lsq::GuassLSQ{T})(xm::MT, jdx::U)         where {T, U, MT<:AbstractMatrix{T}} = _leastsq!(lsq.xdat, lsq.ydat, xm, jdx, _guass)
-(lsq::GuassLSQ{T})(des::Vector{T}, xm::MT) where {T, MT<:AbstractMatrix{T}}    = _leastsq!(lsq.xdat, lsq.ydat, des, xm, _guass)
+function gauss_fit(xdat::Vector{T}, ydat::Vector{T}, σdat::Vector{T}, lb::NTuple{ND,T}, ub::NTuple{ND,T}) where {T, ND}
+    if ND ≠ 4
+        return error("Invalid boundary dimension (4 for Gaussian distribution).")
+    end
 
-_guass(xdat::T, xm::MT, jdx::U)         where {T, U, MT<:AbstractMatrix{T}} = _guass(xdat, xm[1, jdx], xm[2, jdx], xm[3, jdx], xm[4, jdx])
-_guass(xdat::T, params::VT)             where {T, VT<:AbstractVector{T}}    = _guass(xdat, params[1], params[2], params[3], params[4])
-_guass(xdat::T, A::T, μ::T, σ::T, c::T) where T                             = (A / (σ * sqrt(2.0π))) * exp(-0.5 * ((x - μ) / σ)^2.0) + c
+    return curve_fit(GaussχSQ(xdat, ydat, σdat), lb, ub)
+end
 
-# = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = =
+(lsq::GaussLSQ{T})(params::VT)             where {T, VT<:AbstractVector{T}}    = _lsq!(lsq.xdat, lsq.ydat,  params, _gauss)
+(lsq::GaussLSQ{T})(xm::MT, jdx::U)         where {T, U, MT<:AbstractMatrix{T}} = _lsq!(lsq.xdat, lsq.ydat, xm, jdx, _gauss)
+(lsq::GaussLSQ{T})(des::Vector{T}, xm::MT) where {T, MT<:AbstractMatrix{T}}    = _lsq!(lsq.xdat, lsq.ydat, des, xm, _gauss)
+
+(χsq::GaussχSQ{T})(params::VT)             where {T, VT<:AbstractVector{T}}    = _χsq!(χsq.xdat, χsq.ydat, χsq.σdat,  params, _gauss)
+(χsq::GaussχSQ{T})(xm::MT, jdx::U)         where {T, U, MT<:AbstractMatrix{T}} = _χsq!(χsq.xdat, χsq.ydat, χsq.σdat, xm, jdx, _gauss)
+(χsq::GaussχSQ{T})(des::Vector{T}, xm::MT) where {T, MT<:AbstractMatrix{T}}    = _χsq!(χsq.xdat, χsq.ydat, χsq.σdat, des, xm, _gauss)
+
+_gauss(xdat::T, xm::MT, jdx::U)         where {T, U, MT<:AbstractMatrix{T}} = _gauss(xdat, xm[1, jdx], xm[2, jdx], xm[3, jdx], xm[4, jdx])
+_gauss(xdat::T, params::VT)             where {T, VT<:AbstractVector{T}}    = _gauss(xdat, params[1], params[2], params[3], params[4])
+_gauss(xdat::T, A::T, μ::T, σ::T, c::T) where T                             = (A / (σ * sqrt(2.0π))) * exp(-0.5 * ((x - μ) / σ)^2.0) + c
+
+# = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = =
 # Lorentzian LeastSQ
-# = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = =
-struct LorentzLSQ{T} <: AbstractLSQ{T} xdat::Vector{T}; ydat::Vector{T} end
+# = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = =
+struct LorentzLSQ{T} <: AbstractLSQ{T} xdat::Vector{T}; ydat::Vector{T}                  end
+struct LorentzχSQ{T} <: AbstractχSQ{T} xdat::Vector{T}; ydat::Vector{T}; σdat::Vector{T} end
 
 function lorentz_fit(xdat::Vector{T}, ydat::Vector{T}, lb::NTuple{ND,T}, ub::NTuple{ND,T}) where {T, ND}
     if ND ≠ 4
@@ -93,17 +148,29 @@ function lorentz_fit(xdat::Vector{T}, ydat::Vector{T}, lb::NTuple{ND,T}, ub::NTu
     return curve_fit(LorentzLSQ(xdat, ydat), lb, ub)
 end
 
-(lsq::LorentzLSQ{T})(params::VT)             where {T, VT<:AbstractVector{T}}    = _leastsq!(lsq.xdat, lsq.ydat,  params, _lorentz)
-(lsq::LorentzLSQ{T})(xm::MT, jdx::U)         where {T, U, MT<:AbstractMatrix{T}} = _leastsq!(lsq.xdat, lsq.ydat, xm, jdx, _lorentz)
-(lsq::LorentzLSQ{T})(des::Vector{T}, xm::MT) where {T, MT<:AbstractMatrix{T}}    = _leastsq!(lsq.xdat, lsq.ydat, des, xm, _lorentz)
+function lorentz_fit(xdat::Vector{T}, ydat::Vector{T}, σdat::Vector{T}, lb::NTuple{ND,T}, ub::NTuple{ND,T}) where {T, ND}
+    if ND ≠ 4
+        return error("Invalid boundary dimension (4 for Lorentzian distribution).")
+    end
+
+    return curve_fit(LorentzχSQ(xdat, ydat, σdat), lb, ub)
+end
+
+(lsq::LorentzLSQ{T})(params::VT)             where {T, VT<:AbstractVector{T}}    = _lsq!(lsq.xdat, lsq.ydat,  params, _lorentz)
+(lsq::LorentzLSQ{T})(xm::MT, jdx::U)         where {T, U, MT<:AbstractMatrix{T}} = _lsq!(lsq.xdat, lsq.ydat, xm, jdx, _lorentz)
+(lsq::LorentzLSQ{T})(des::Vector{T}, xm::MT) where {T, MT<:AbstractMatrix{T}}    = _lsq!(lsq.xdat, lsq.ydat, des, xm, _lorentz)
+
+(χsq::LorentzχSQ{T})(params::VT)             where {T, VT<:AbstractVector{T}}    = _χsq!(χsq.xdat, χsq.ydat, χsq.σdat,  params, _lorentz)
+(χsq::LorentzχSQ{T})(xm::MT, jdx::U)         where {T, U, MT<:AbstractMatrix{T}} = _χsq!(χsq.xdat, χsq.ydat, χsq.σdat, xm, jdx, _lorentz)
+(χsq::LorentzχSQ{T})(des::Vector{T}, xm::MT) where {T, MT<:AbstractMatrix{T}}    = _χsq!(χsq.xdat, χsq.ydat, χsq.σdat, des, xm, _lorentz)
 
 _lorentz(xdat::T, xm::MT, jdx::U)         where {T, U, MT<:AbstractMatrix{T}} = _lorentz(xdat, xm[1, jdx], xm[2, jdx], xm[3, jdx], xm[4, jdx])
 _lorentz(xdat::T, params::VT)             where {T, VT<:AbstractVector{T}}    = _lorentz(xdat, params[1], params[2], params[3], params[4])
 _lorentz(xdat::T, A::T, μ::T, Γ::T, c::T) where T                             = (A / π) * (0.5Γ / ((x - μ)^2.0 + (0.5Γ)^2.0)) + c
 
-# = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = =
+# = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = =
 # WCSCA Curve Fitting
-# = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = =
+# = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = =
 function curve_fit(sq::SQ, lb::NTuple{ND,T}, ub::NTuple{ND,T}, NP::U=25, NR::U=2, dmax::T=1e-7) where {SQ<:AbstractSQ, T, U, ND}
     NP = NP ≥ 25 * ND ? NP : 25 * ND
     NR = NR > ND ? NR : NR = ND + 1

@@ -70,15 +70,15 @@ params, _ = decay_fit(xdat, ydat, lb, ub)
 ```
 where `xdat::Vector{T}` and `ydat::Vector{T}` are the raw datas according to the above formula, and the `params` is the solution.
 
-### 1.2 Guassian Distribution
+### 1.2 Gaussian Distribution
 
-The Guassian distribution provided by `Numssp` is defined as:
+The Gaussian distribution provided by `Numssp` is defined as:
 
 <a href="https://www.codecogs.com/eqnedit.php?latex=f_{\text{G}}(x;&space;A,&space;\mu,&space;\sigma,&space;c)&space;=&space;\dfrac{A}{\sigma&space;\sqrt{2\pi}}&space;\cdot&space;e^{-&space;\frac{1}{2}\left(\frac{x&space;-&space;\mu}{\sigma}\right)^2}" target="_blank"><img src="https://latex.codecogs.com/svg.latex?f_{\text{G}}(x;&space;A,&space;\mu,&space;\sigma,&space;c)&space;=&space;\dfrac{A}{\sigma&space;\sqrt{2\pi}}&space;\cdot&space;e^{-&space;\frac{1}{2}\left(\frac{x&space;-&space;\mu}{\sigma}\right)^2}" title="f_{\text{G}}(x; A, \mu, \sigma, c) = \dfrac{A}{\sigma \sqrt{2\pi}} \cdot e^{- \frac{1}{2}\left(\frac{x - \mu}{\sigma}\right)^2}" /></a>
 
 and is easy to call:
 ```julia
-params, _ = guass_fit(xdat, ydat, lb, ub)
+params, _ = gauss_fit(xdat, ydat, lb, ub)
 ```
 
 ### 1.3 Lorentzian Distribution
@@ -91,3 +91,15 @@ and is easy to call:
 ```julia
 params, _ = lorentz_fit(xdat, ydat, lb, ub)
 ```
+
+### 1.4 χ² Curve Fitting (Experimental)
+
+It is also possible to have a χ² curve fitting or weighted least square fitting according to:
+
+<a href="https://www.codecogs.com/eqnedit.php?latex=\chi^2&space;=&space;\sum_{i=1}^{N}&space;\left(&space;\dfrac{y_i&space;-&space;f(x_i;&space;\vec{p})}{\sigma_i}&space;\right)^2" target="_blank"><img src="https://latex.codecogs.com/svg.latex?\chi^2&space;=&space;\sum_{i=1}^{N}&space;\left(&space;\dfrac{y_i&space;-&space;f(x_i;&space;\vec{p})}{\sigma_i}&space;\right)^2" title="\chi^2 = \sum_{i=1}^{N} \left( \dfrac{y_i - f(x_i; \vec{p})}{\sigma_i} \right)^2" /></a>
+
+and is easy to call:
+```julia
+params, _ = xxx_fit(xdat, ydat, σdat, lb, ub)
+```
+, where `xxx` stands for the name of distribution in `decay, gauss, lorentz`, and the elements in `σdat::Vector{T}` should be `σ⁻²`.
