@@ -29,31 +29,31 @@ x = [1:it_max;]
 
 fg = figure(figsize=[12.8, 3.6 * ND], clear=true)
 
-ax = fg.add_subplot(NR, 2, 1)
-ax.plot(x, history.log_fsol, lw=1.5)
-ax.set_yscale("symlog")
-ax.set_xscale("log")
-ax.set_xlim(x[1], x[end])
-ax.set_title(string(history.log_fsol[end]))
+ax = fg[:add_subplot](NR, 2, 1)
+ax[:plot](x, history.log_fsol, lw=1.5)
+ax[:set_yscale]("symlog")
+ax[:set_xscale]("log")
+ax[:set_xlim](x[1], x[end])
+ax[:set_title](string(history.log_fsol[end]))
 
 for k in 1:ND
-    ax = fg.add_subplot(NR, 2, 2k+1)
-    ax.plot(x, history.log_xsol[k, :], lw=1.5, c=string("C", k))
-    ax.set_ylim(lbv, ubv)
-    ax.set_yscale("symlog")
-    ax.set_xscale("log")
-    ax.set_xlim(x[1], x[end])
-    ax.set_title(string(history.log_xsol[k, end]))
+    ax = fg[:add_subplot](NR, 2, 2k+1)
+    ax[:plot](x, history.log_xsol[k, :], lw=1.5, c=string("C", k))
+    ax[:set_ylim](lbv, ubv)
+    ax[:set_yscale]("symlog")
+    ax[:set_xscale]("log")
+    ax[:set_xlim](x[1], x[end])
+    ax[:set_title](string(history.log_xsol[k, end]))
 end
 
 for k in 1:NR
-    ax = fg.add_subplot(NR, 2, 2k)
-    ax.plot(x, history.log_fork[k, :], lw=1.5, c=string("C", k-1))
-    ax.set_xscale("log")
-    ax.set_xlim(x[1], x[end])
+    ax = fg[:add_subplot](NR, 2, 2k)
+    ax[:plot](x, history.log_fork[k, :], lw=1.5, c=string("C", k-1))
+    ax[:set_xscale]("log")
+    ax[:set_xlim](x[1], x[end])
 end
 
-fg.set_tight_layout(true)
+fg[:set_tight_layout](true)
 ```
 
 In addition, based on WCSCA solver, the following functionality is provided.
@@ -74,7 +74,7 @@ where `xdat::Vector{T}` and `ydat::Vector{T}` are the raw datas according to the
 
 The Gaussian distribution provided by `Numssp` is defined as:
 
-<a href="https://www.codecogs.com/eqnedit.php?latex=f_{\text{G}}(x;&space;A,&space;\mu,&space;\sigma,&space;c)&space;=&space;\dfrac{A}{\sigma&space;\sqrt{2\pi}}&space;\cdot&space;e^{-&space;\frac{1}{2}\left(\frac{x&space;-&space;\mu}{\sigma}\right)^2}" target="_blank"><img src="https://latex.codecogs.com/svg.latex?f_{\text{G}}(x;&space;A,&space;\mu,&space;\sigma,&space;c)&space;=&space;\dfrac{A}{\sigma&space;\sqrt{2\pi}}&space;\cdot&space;e^{-&space;\frac{1}{2}\left(\frac{x&space;-&space;\mu}{\sigma}\right)^2}" title="f_{\text{G}}(x; A, \mu, \sigma, c) = \dfrac{A}{\sigma \sqrt{2\pi}} \cdot e^{- \frac{1}{2}\left(\frac{x - \mu}{\sigma}\right)^2}" /></a>
+<a href="https://www.codecogs.com/eqnedit.php?latex=f_{\text{G}}(x;&space;A,&space;\mu,&space;\sigma,&space;c)&space;=&space;\dfrac{A}{\sigma&space;\sqrt{2\pi}}&space;\cdot&space;e^{-&space;\frac{1}{2}\left(\frac{x&space;-&space;\mu}{\sigma}\right)^2}&space;&plus;&space;c" target="_blank"><img src="https://latex.codecogs.com/svg.latex?f_{\text{G}}(x;&space;A,&space;\mu,&space;\sigma,&space;c)&space;=&space;\dfrac{A}{\sigma&space;\sqrt{2\pi}}&space;\cdot&space;e^{-&space;\frac{1}{2}\left(\frac{x&space;-&space;\mu}{\sigma}\right)^2}&space;&plus;&space;c" title="f_{\text{G}}(x; A, \mu, \sigma, c) = \dfrac{A}{\sigma \sqrt{2\pi}} \cdot e^{- \frac{1}{2}\left(\frac{x - \mu}{\sigma}\right)^2} + c" /></a>
 
 and is easy to call:
 ```julia
@@ -85,7 +85,7 @@ params, _ = gauss_fit(xdat, ydat, lb, ub)
 
 The Lorentzian distribution provided by `Numssp` is defined as:
 
-<a href="https://www.codecogs.com/eqnedit.php?latex=f_{\text{L}}(x;&space;A,&space;\mu,&space;\Gamma,&space;c)&space;=&space;\dfrac{A}{\pi}&space;\cdot&space;\dfrac{\Gamma&space;/&space;2}{(x&space;-&space;\mu)^2&space;&plus;&space;(\Gamma&space;/&space;2)^2}" target="_blank"><img src="https://latex.codecogs.com/svg.latex?f_{\text{L}}(x;&space;A,&space;\mu,&space;\Gamma,&space;c)&space;=&space;\dfrac{A}{\pi}&space;\cdot&space;\dfrac{\Gamma&space;/&space;2}{(x&space;-&space;\mu)^2&space;&plus;&space;(\Gamma&space;/&space;2)^2}" title="f_{\text{L}}(x; A, \mu, \Gamma, c) = \dfrac{A}{\pi} \cdot \dfrac{\Gamma / 2}{(x - \mu)^2 + (\Gamma / 2)^2}" /></a>
+<a href="https://www.codecogs.com/eqnedit.php?latex=f_{\text{L}}(x;&space;A,&space;\mu,&space;\Gamma,&space;c)&space;=&space;\dfrac{A}{\pi}&space;\cdot&space;\dfrac{\Gamma&space;/&space;2}{(x&space;-&space;\mu)^2&space;&plus;&space;(\Gamma&space;/&space;2)^2}&space;&plus;&space;c" target="_blank"><img src="https://latex.codecogs.com/svg.latex?f_{\text{L}}(x;&space;A,&space;\mu,&space;\Gamma,&space;c)&space;=&space;\dfrac{A}{\pi}&space;\cdot&space;\dfrac{\Gamma&space;/&space;2}{(x&space;-&space;\mu)^2&space;&plus;&space;(\Gamma&space;/&space;2)^2}&space;&plus;&space;c" title="f_{\text{L}}(x; A, \mu, \Gamma, c) = \dfrac{A}{\pi} \cdot \dfrac{\Gamma / 2}{(x - \mu)^2 + (\Gamma / 2)^2} + c" /></a>
 
 and is easy to call:
 ```julia
@@ -96,10 +96,49 @@ params, _ = lorentz_fit(xdat, ydat, lb, ub)
 
 It is also possible to have a χ² curve fitting or weighted least square fitting according to:
 
-<a href="https://www.codecogs.com/eqnedit.php?latex=\chi^2&space;=&space;\sum_{i=1}^{N}&space;\left(&space;\dfrac{y_i&space;-&space;f(x_i;&space;\vec{p})}{\sigma_i}&space;\right)^2" target="_blank"><img src="https://latex.codecogs.com/svg.latex?\chi^2&space;=&space;\sum_{i=1}^{N}&space;\left(&space;\dfrac{y_i&space;-&space;f(x_i;&space;\vec{p})}{\sigma_i}&space;\right)^2" title="\chi^2 = \sum_{i=1}^{N} \left( \dfrac{y_i - f(x_i; \vec{p})}{\sigma_i} \right)^2" /></a>
+<a href="https://www.codecogs.com/eqnedit.php?latex=\chi^2&space;=&space;\sum_{i=1}^{N}&space;\left(&space;\dfrac{y_i&space;-&space;f(x_i;&space;\vec{p})}{\sigma_i}&space;\right)^2&space;&plus;&space;c" target="_blank"><img src="https://latex.codecogs.com/svg.latex?\chi^2&space;=&space;\sum_{i=1}^{N}&space;\left(&space;\dfrac{y_i&space;-&space;f(x_i;&space;\vec{p})}{\sigma_i}&space;\right)^2&space;&plus;&space;c" title="\chi^2 = \sum_{i=1}^{N} \left( \dfrac{y_i - f(x_i; \vec{p})}{\sigma_i} \right)^2 + c" /></a>
 
 and is easy to call:
 ```julia
 params, _ = xxx_fit(xdat, ydat, σdat, lb, ub)
 ```
 , where `xxx` stands for the name of distribution in `decay, gauss, lorentz`, and the elements in `σdat::Vector{T}` should be `σ⁻²`.
+
+## 2. Unit Conversion
+
+A functionality of unit conversion, by using
+```julia
+@unit_convert x "unit_1"=>"unit_2"
+```
+where `x` can be any `<:Real` number or `AbstractVector{<:Real}`. Currently, the following conversion is provided:
+- `"thz", "nj"`: terahertz <=> nanojoul
+- `"thz", "meV"`: terahertz <=> milli-electron volt
+- `"nm", "nj"`: nanometer <=> nanojoul
+- `"nm", "eV"`: nanometer <=> electron volt
+- `"cm⁻¹", "nm"`: reciprocal wavelength <=> nanometer
+- `"ps", "μm"`: picosecond <=> micrometer
+
+## 3. Some Customized Function for [PyPlot](https://github.com/JuliaPy/PyPlot.jl.git)
+
+- For setting of [using LaTeX](https://matplotlib.org/tutorials/text/usetex.html?highlight=usetex) and fontsize:
+    ```julia
+    using PyPlot
+    set_rcParams!(rc, PyPlot.PyDict(PyPlot.matplotlib."rcParams"), fontsize=12)
+    ```
+
+- For setting ticklabels of specific direction:
+    ```julia
+    set_ticklabels!(axis, tick_start, tick_end, tick_step, direction, pad=true)
+    ``` 
+    where `tick_start:tick_step:tick_end` can be both `Int` or `Float64`, `direction` should be `:x, :y, :z`. If you have used
+    ```julia
+    axis[:set_xticks](..., ...)
+    axis[:set_yticks](..., ...)
+    axis[:set_zticks](..., ...)
+    ```
+    then `pad` should be passed by `false`.
+
+- For saving a pdf format figure:
+    ```julia
+    save_pdf(file_name, fig)
+    ```
