@@ -1,108 +1,81 @@
 # Numssp
 
-`Numssp` is a numerical package for the daily routines of my solid state physics (SSP) experiments.
+`Numssp.jl` is a numerical package for the daily routines of my solid state physics (SSP) experiments.
 
-## 1. Water-Cycle Sine-Cosine Algorithm (WCSCA)
+## 1. Optimization and Root Finding
 
-Water-Cycle Sine-Cosine Algorithm (WCSCA) is a hybrid population-based algorithm based on [water-cycle algorithm](http://dx.doi.org/10.1016/j.compstruc.2012.07.010) and [sine-cosine algorithm](http://dx.doi.org/10.1016/j.knosys.2015.12.022) with constraint handling method based on [this article](https://doi.org/10.1016/S0045-7825(99)00389-8). This algorithm is used to solve curve/model fitting problems without lots of annoying initial assumptions of fitting parameters. Generally, similar to other population-based algorithm, you only have to provide two things: objective function `fn!` and fitting lower/upper boundaries `lb, ub`.
+Based on the implementation of the [WCSCA](src/solver/README.md) solver, the following functionality is provided.
 
-It will be easy to start with:
+### 1.1 Function Minimization (Root Finding)
+
 ```julia
-using Numssp, PyPlot
+minimize!(fn!::Function, lb::NTuple{ND,T}, ub::NTuple{ND,T}[, NP::Int, NR::Int, imax::Int, dmax::T])
 ```
-And there are 3 pre-defined common models for benchmark: [Rosenbrock](https://en.wikipedia.org/wiki/Rosenbrock_function) as `rosen!`, [Ackley](https://en.wikipedia.org/wiki/Ackley_function) as `ackley!`, and [Rastrigin](https://en.wikipedia.org/wiki/Rastrigin_function)  as `rastrigin!`. Welcome to test if the WCSCA is able to solve a high-dimensional optimization problem like following:
+where:
+- `fn!` is the objective function to be minimized.
+- `lb` and `ub` are the lower/upper boundaries to define the feasible region to be minimized.
+- `NP` is the popuplation size for WCSCA (*optional*).
+- `NR` is the number of splitting in two subpopulations (*optional*).
+- `imax` is the maximum iteration of WCSCA evolution (*optional*).
+- `dmax` is the criterion distance between candidates to start a stagnation treatment (*optional*).
+
+The objective function `fn!` should be defined as:
 ```julia
-fn! = rosen!; ND = 30
-
-lbv = -30.; ubv = 30.
-
-lb = ntuple(x -> lbv, ND)
-ub = ntuple(x -> ubv, ND)
-
-history = evolve_benchmark(fn!, lb, ub)
-```
-The function `evolve_benchmark` will return a `WCSCALog` type which records the history of the WCSCA evolution. You can make a series of plots to see how the WCSCA works like below:
-```julia
-ND, NR, it_max = history.log_dims
-
-x = [1:it_max;]
-
-fg = figure(figsize=[12.8, 3.6 * ND], clear=true)
-
-ax = fg[:add_subplot](NR, 2, 1)
-ax[:plot](x, history.log_fsol, lw=1.5)
-ax[:set_yscale]("symlog")
-ax[:set_xscale]("log")
-ax[:set_xlim](x[1], x[end])
-ax[:set_title](string(history.log_fsol[end]))
-
-for k in 1:ND
-    ax = fg[:add_subplot](NR, 2, 2k+1)
-    ax[:plot](x, history.log_xsol[k, :], lw=1.5, c=string("C", k))
-    ax[:set_ylim](lbv, ubv)
-    ax[:set_yscale]("symlog")
-    ax[:set_xscale]("log")
-    ax[:set_xlim](x[1], x[end])
-    ax[:set_title](string(history.log_xsol[k, end]))
+function fn!(params::Vector{T}) where T
+    # body ...
 end
-
-for k in 1:NR
-    ax = fg[:add_subplot](NR, 2, 2k)
-    ax[:plot](x, history.log_fork[k, :], lw=1.5, c=string("C", k-1))
-    ax[:set_xscale]("log")
-    ax[:set_xlim](x[1], x[end])
-end
-
-fg[:set_tight_layout](true)
 ```
 
-In addition, based on WCSCA solver, the following functionality is provided.
-
-### 1.1 Multi-Exponential Decay
-
-The multi-exponential decay provided by `Numssp` is defined as:
-
-<a href="https://www.codecogs.com/eqnedit.php?latex=f(x)&space;=&space;A_1&space;\cdot&space;e^{-x/\tau_1}&space;&plus;&space;A_2&space;\cdot&space;e^{-x/\tau_2}&space;&plus;&space;\ldots&space;&plus;&space;c" target="_blank"><img src="https://latex.codecogs.com/svg.latex?f(x)&space;=&space;A_1&space;\cdot&space;e^{-x/\tau_1}&space;&plus;&space;A_2&space;\cdot&space;e^{-x/\tau_2}&space;&plus;&space;\ldots&space;&plus;&space;c" title="f(x) = A_1 \cdot e^{-x/\tau_1} + A_2 \cdot e^{-x/\tau_2} + \ldots + c" /></a>
-
-where the parameters should be arranged in a `NTuple` form as `(A₁, τ₁, A₂, τ₂, ..., c)` and be passed to the `decay_fit` function like
+A simple way to conduct a minimization is:
 ```julia
-params, _ = decay_fit(xdat, ydat, lb, ub)
+res = minimize!(fn!, lb, ub)
 ```
-where `xdat::Vector{T}` and `ydat::Vector{T}` are the raw datas according to the above formula, and the `params` is the solution.
+and use:
+- `res.x` to access the optiomized parameters.
+- `res.f` to access the corresponding function value.
 
-### 1.2 Gaussian Distribution
+### 1.2 Least-Square and χ² Curve Fitting
 
-The Gaussian distribution provided by `Numssp` is defined as:
+A χ² curve fitting is described as:
 
-<a href="https://www.codecogs.com/eqnedit.php?latex=f_{\text{G}}(x;&space;A,&space;\mu,&space;\sigma,&space;c)&space;=&space;\dfrac{A}{\sigma&space;\sqrt{2\pi}}&space;\cdot&space;e^{-&space;\frac{1}{2}\left(\frac{x&space;-&space;\mu}{\sigma}\right)^2}&space;&plus;&space;c" target="_blank"><img src="https://latex.codecogs.com/svg.latex?f_{\text{G}}(x;&space;A,&space;\mu,&space;\sigma,&space;c)&space;=&space;\dfrac{A}{\sigma&space;\sqrt{2\pi}}&space;\cdot&space;e^{-&space;\frac{1}{2}\left(\frac{x&space;-&space;\mu}{\sigma}\right)^2}&space;&plus;&space;c" title="f_{\text{G}}(x; A, \mu, \sigma, c) = \dfrac{A}{\sigma \sqrt{2\pi}} \cdot e^{- \frac{1}{2}\left(\frac{x - \mu}{\sigma}\right)^2} + c" /></a>
+<div align=center><a href="https://www.codecogs.com/eqnedit.php?latex=\chi^2&space;=&space;\sum_{i=1}^{N}&space;\left(&space;\dfrac{y_i&space;-&space;f(x_i;&space;\vec{p})}{\sigma_i}&space;\right)^2&space;&plus;&space;c" target="_blank"><img src="https://latex.codecogs.com/svg.latex?\chi^2&space;=&space;\sum_{i=1}^{N}&space;\left(&space;\dfrac{y_i&space;-&space;f(x_i;&space;\vec{p})}{\sigma_i}&space;\right)^2&space;&plus;&space;c" title="\chi^2 = \sum_{i=1}^{N} \left( \dfrac{y_i - f(x_i; \vec{p})}{\sigma_i} \right)^2 + c" /></a></div>
 
-and is easy to call:
+, when all of `σ` are `1.0` is a least-squrea curve fitting.
+
+To conduct:
+- χ² curve fitting by passing `(xdat, ydat, σdat, lb, ub)`.
+- least-square curve fitting by passing `(xdat, ydat, lb, ub)`.
+
+where
+- `xdat::Vector{T}` is the x-raw data
+- `ydat::Vector{T}` is the y-raw data
+- `σdat::Vector{T}` is the σ-raw data
+
+Available fitting models are described as below:
+
+#### Multi-Exponential Decay
+
+<div align=center><a href="https://www.codecogs.com/eqnedit.php?latex=f(x)&space;=&space;A_1&space;\cdot&space;e^{-x/\tau_1}&space;&plus;&space;A_2&space;\cdot&space;e^{-x/\tau_2}&space;&plus;&space;\ldots&space;&plus;&space;c" target="_blank"><img src="https://latex.codecogs.com/svg.latex?f(x)&space;=&space;A_1&space;\cdot&space;e^{-x/\tau_1}&space;&plus;&space;A_2&space;\cdot&space;e^{-x/\tau_2}&space;&plus;&space;\ldots&space;&plus;&space;c" title="f(x) = A_1 \cdot e^{-x/\tau_1} + A_2 \cdot e^{-x/\tau_2} + \ldots + c" /></a></div>
+
 ```julia
-params, _ = gauss_fit(xdat, ydat, lb, ub)
+res = decay_fit(xdat, ydat[, σdat], lb, ub)
 ```
 
-### 1.3 Lorentzian Distribution
+#### Gaussian Distribution
 
-The Lorentzian distribution provided by `Numssp` is defined as:
+<div align=center><a href="https://www.codecogs.com/eqnedit.php?latex=f_{\text{G}}(x;&space;A,&space;\mu,&space;\sigma,&space;c)&space;=&space;\dfrac{A}{\sigma&space;\sqrt{2\pi}}&space;\cdot&space;e^{-&space;\frac{1}{2}\left(\frac{x&space;-&space;\mu}{\sigma}\right)^2}&space;&plus;&space;c" target="_blank"><img src="https://latex.codecogs.com/svg.latex?f_{\text{G}}(x;&space;A,&space;\mu,&space;\sigma,&space;c)&space;=&space;\dfrac{A}{\sigma&space;\sqrt{2\pi}}&space;\cdot&space;e^{-&space;\frac{1}{2}\left(\frac{x&space;-&space;\mu}{\sigma}\right)^2}&space;&plus;&space;c" title="f_{\text{G}}(x; A, \mu, \sigma, c) = \dfrac{A}{\sigma \sqrt{2\pi}} \cdot e^{- \frac{1}{2}\left(\frac{x - \mu}{\sigma}\right)^2} + c" /></a></div>
 
-<a href="https://www.codecogs.com/eqnedit.php?latex=f_{\text{L}}(x;&space;A,&space;\mu,&space;\Gamma,&space;c)&space;=&space;\dfrac{A}{\pi}&space;\cdot&space;\dfrac{\Gamma&space;/&space;2}{(x&space;-&space;\mu)^2&space;&plus;&space;(\Gamma&space;/&space;2)^2}&space;&plus;&space;c" target="_blank"><img src="https://latex.codecogs.com/svg.latex?f_{\text{L}}(x;&space;A,&space;\mu,&space;\Gamma,&space;c)&space;=&space;\dfrac{A}{\pi}&space;\cdot&space;\dfrac{\Gamma&space;/&space;2}{(x&space;-&space;\mu)^2&space;&plus;&space;(\Gamma&space;/&space;2)^2}&space;&plus;&space;c" title="f_{\text{L}}(x; A, \mu, \Gamma, c) = \dfrac{A}{\pi} \cdot \dfrac{\Gamma / 2}{(x - \mu)^2 + (\Gamma / 2)^2} + c" /></a>
-
-and is easy to call:
 ```julia
-params, _ = lorentz_fit(xdat, ydat, lb, ub)
+res = gauss_fit(xdat, ydat[, σdat], lb, ub)
 ```
 
-### 1.4 χ² Curve Fitting (Experimental)
+#### Lorentzian Distribution
 
-It is also possible to have a χ² curve fitting or weighted least square fitting according to:
+<div align=center><a href="https://www.codecogs.com/eqnedit.php?latex=f_{\text{L}}(x;&space;A,&space;\mu,&space;\Gamma,&space;c)&space;=&space;\dfrac{A}{\pi}&space;\cdot&space;\dfrac{\Gamma&space;/&space;2}{(x&space;-&space;\mu)^2&space;&plus;&space;(\Gamma&space;/&space;2)^2}&space;&plus;&space;c" target="_blank"><img src="https://latex.codecogs.com/svg.latex?f_{\text{L}}(x;&space;A,&space;\mu,&space;\Gamma,&space;c)&space;=&space;\dfrac{A}{\pi}&space;\cdot&space;\dfrac{\Gamma&space;/&space;2}{(x&space;-&space;\mu)^2&space;&plus;&space;(\Gamma&space;/&space;2)^2}&space;&plus;&space;c" title="f_{\text{L}}(x; A, \mu, \Gamma, c) = \dfrac{A}{\pi} \cdot \dfrac{\Gamma / 2}{(x - \mu)^2 + (\Gamma / 2)^2} + c" /></a></div>
 
-<a href="https://www.codecogs.com/eqnedit.php?latex=\chi^2&space;=&space;\sum_{i=1}^{N}&space;\left(&space;\dfrac{y_i&space;-&space;f(x_i;&space;\vec{p})}{\sigma_i}&space;\right)^2&space;&plus;&space;c" target="_blank"><img src="https://latex.codecogs.com/svg.latex?\chi^2&space;=&space;\sum_{i=1}^{N}&space;\left(&space;\dfrac{y_i&space;-&space;f(x_i;&space;\vec{p})}{\sigma_i}&space;\right)^2&space;&plus;&space;c" title="\chi^2 = \sum_{i=1}^{N} \left( \dfrac{y_i - f(x_i; \vec{p})}{\sigma_i} \right)^2 + c" /></a>
-
-and is easy to call:
 ```julia
-params, _ = xxx_fit(xdat, ydat, σdat, lb, ub)
+res = lorentz_fit(xdat, ydat[, σdat], lb, ub)
 ```
-, where `xxx` stands for the name of distribution in `decay, gauss, lorentz`, and the elements in `σdat::Vector{T}` should be `σ⁻²`.
 
 ## 2. Unit Conversion
 
@@ -130,7 +103,9 @@ where `x` can be any `<:Real` number or `AbstractVector{<:Real}`. Currently, the
     ```julia
     set_ticklabels!(axis, tick_start, tick_end, tick_step, direction, pad=true)
     ``` 
-    where `tick_start:tick_step:tick_end` can be both `Int` or `Float64`, `direction` should be `:x, :y, :z`. If you have used
+    where `tick_start:tick_step:tick_end` can be both `Int` or `Float64`, `direction` should be `:x, :y, :z`.
+
+    If you have used
     ```julia
     axis[:set_xticks](..., ...)
     axis[:set_yticks](..., ...)

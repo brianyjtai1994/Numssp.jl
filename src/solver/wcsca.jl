@@ -1,74 +1,124 @@
-# = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = =
-# Water Cycle Sine-Cosine Algorithm Types Design
-# = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = =
+#=- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+ Water Cycle Sine-Cosine Algorithm Types Design
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -=#
 abstract type AbstractWCSCA{T} <: AbstractNumssp{T} end
 
-# WCSCA System, stands for the whole population
-struct WCSCAS{T} <: AbstractWCSCA{T}
-    xpop::Matrix{T} # Current Position
-    fval::Vector{T} # Current function-value
-    viol::Vector{T} # Violation
-    feas::BitVector # Feasibility
+mutable struct Waters{T} <: AbstractWCSCA{T}
+    x::Vector{T}; f::T; v::Bool; c::T
+    #=
+    x := parameters passed into models
+    f := function-value of fn!(x)
+    v := viability / feasibility
+    c := contravention / violation
+    =#
+
+    function Waters(lb::NTuple{ND,T}, ub::NTuple{ND,T}) where {ND, T}
+        x = Vector{T}(undef, ND)
+
+        @inbounds @simd for i in eachindex(x)
+            x[i] = lb[i] + rand(T) * (ub[i] - lb[i])
+        end
+
+        return new{T}(x, Inf, false, 0.0)
+    end
 end
 
-function WCSCAS(lb::NTuple{ND,T}, ub::NTuple{ND,T}, NP::U) where {ND, T, U}
-    xpop = Matrix{T}(undef, ND, NP)
+function _waters(lb::NTuple{ND,T}, ub::NTuple{ND,T}, NP::U) where {ND, T, U}
+    wats = Vector{Waters{T}}(undef, NP) # 2 allocations for each Waters{T}
 
-    @inbounds for j in axes(xpop, 2)
-        @simd for i in axes(xpop, 1)
-            xpop[i,j] = lb[i] + rand(T) * (ub[i] - lb[i])
+    @inbounds @simd for i in eachindex(wats)
+        wats[i] = Waters(lb, ub)
+    end
+
+    return wats
+end
+
+function show(io::IO, w::Waters{T}) where T
+    if abs(w.f) < 1000.0
+        @printf "func-value: %.2f\n" w.f
+    else
+        @printf "func-value: %.2e\n" w.f
+    end
+
+    @printf "  feasible: %s\n" w.v
+    @printf " violation: %.2f\n" w.c
+
+    print("parameters:\n [")
+
+    @inbounds for i in 1:length(w.x)-1
+        val = w.x[i]
+        if abs(val) < 1000.0
+            @printf "%.2f, " val
+        else
+            @printf "%.2e, " val
         end
     end
 
-    fval = Vector{T}(undef, NP)
-    viol = Vector{T}(undef, NP)
-    feas = BitVector(undef, NP)
-
-    return WCSCAS(xpop, fval, viol, feas)
+    if abs(w.x[end]) < 1000.0
+        @printf "%.2f]\n" w.x[end]
+    else
+        @printf "%.2e]\n" w.x[end]
+    end
 end
 
-# Elitist part of WCSCA System
-struct Rivers{T, B, L, IM, IV} <: AbstractWCSCA{T}
-    xpop::SubArray{T, 2, Matrix{T}, IM, L}
-    fval::SubArray{T, 1, Vector{T}, IV, L}
-    viol::SubArray{T, 1, Vector{T}, IV, L}
-    feas::SubArray{B, 1, BitVector, IV, L}
+function ==(w1::Waters{T}, w2::Waters{T}) where T
+    # w1, w2 are both feasible
+    if w1.v && w2.v
+        return w1.f == w2.f
+
+    # w1, w2 are both infesasible
+    elseif !w1.v && !w2.v
+        return w1.c == w2.c
+
+    else
+        return false
+    end
 end
 
-# Other candidates of WCSCA System
-struct Creeks{T, B, L, IM, IV} <: AbstractWCSCA{T}
-    xpop::SubArray{T, 2, Matrix{T}, IM, L}
-    fval::SubArray{T, 1, Vector{T}, IV, L}
-    viol::SubArray{T, 1, Vector{T}, IV, L}
-    feas::SubArray{B, 1, BitVector, IV, L}
+function isless(w1::Waters{T}, w2::Waters{T}) where T
+    # w1, w2 are both feasible
+    if w1.v && w2.v
+        return w1.f < w2.f
+
+    # w1, w2 are both infesasible
+    elseif !w1.v && !w2.v
+        return w1.c < w2.c
+
+    # if (w1, w2) = (feasible, infeasible), then w1 < w2
+    # if (w1, w2) = (infeasible, feasible), then w2 < w1
+    else
+        return w1.v
+    end
 end
 
-Rivers(w::WCSCAS{T}, NR::U)        where {T, U} = Rivers(view(w.xpop, :,    1:NR), view(w.fval,    1:NR), view(w.viol,    1:NR), view(w.feas,    1:NR))
-Creeks(w::WCSCAS{T}, NR::U, NP::U) where {T, U} = Creeks(view(w.xpop, :, NR+1:NP), view(w.fval, NR+1:NP), view(w.viol, NR+1:NP), view(w.feas, NR+1:NP))
+_rivers(wats::Vector{Waters{T}}, NR::Int)          where T = view(wats, 1:NR)
+_creeks(wats::Vector{Waters{T}}, NR::Int, NP::Int) where T = view(wats, NR+1:NP)
+
+struct WCSCALog{T, U} <: AbstractWCSCA{T}
+    xsol::Matrix{T}    # The best position, size = (ND, imax)
+    fsol::Vector{T}    # The best solution, size = (imax,)
+    fork::Matrix{U}    # Histories of fork, size = (NR, imax)
+    dims::NTuple{3, U}
+
+    function WCSCALog(ND::U, NR::U, imax::U, ::Val{T}) where {T<:Number, U}
+        return new{T, U}(Matrix{T}(undef, ND, imax), Vector{T}(undef, imax),
+                         Matrix{U}(undef, NR, imax), (ND, NR, imax))
+    end
+end
+
+function _update!(logs::WCSCALog{T,U}, sea::Waters{T}, forks::Vector{U}, it::U) where {T, U}
+    @inbounds @simd for i in eachindex(sea.x)
+        logs.xsol[i, it] = sea.x[i]
+    end
+
+    logs.fsol[it] = sea.f
+
+    @inbounds @simd for i in eachindex(forks)
+        logs.fork[i, it] = forks[i]
+    end
+end
 
 include("constraint.jl")
-include("benchmark_functions.jl"); export rosen!, ackley!, rastrigin!, gen_fitdata!
-include("history.jl"); export evolve_benchmark
-
-# = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = =
-# Operation on Types of WCSCA
-# = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = =
 include("operand.jl")
-
-_trial!(vecb::Vector{T}, rv::WR, cr::WC, node::U, jdx::U, ss::T)   where {T, U, WR, WC}  = _trial!(vecb, rv.xpop, cr.xpop, node, jdx, ss)
-_trial!(vecb::Vector{T}, rv::WR, jdx::U, ss::T)                    where {T, U, WR}      = _trial!(vecb, rv.xpop, jdx, ss) # ss := step size
-
-_rain!(vecb::Vector{T}, rv::WR, cr::WC, jdx::U, dmax::T)           where {T, U, WR, WC}  = _rain!(vecb, rv.xpop, cr.xpop, jdx, dmax)
-_rain!(vecb::Vector{T}, rv::WR, lb::NDT, ub::NDT, jdx::U, dmax::T) where {T, U, WR, NDT} = _rain!(vecb, rv.xpop, lb, ub, jdx, dmax)
-
-_init!(fn!::F, con::C, wca::W)                                     where {F, C, T, W}    = _init!(fn!, con, wca.xpop, wca.fval, wca.viol, wca.feas)
-_sort!(wca::W, matb::Matrix{T})                                    where {T, W}          = _sort!(matb, wca.xpop, wca.fval, wca.viol, wca.feas)
-
-_group!(fork::Vector{U}, wca::W, NR::U, NC::U)                     where {T, U, W}       = _group!(fork, wca.fval, NR, NC)
-_match!(fn!::F, con::C, wca::W, xnew::Vector{T}, rdx::U, jdx::U)   where {F, C, W, T, U} = _match!(fn!, con, xnew, rdx, jdx, wca.xpop, wca.fval, wca.viol, wca.feas)
-_renew!(wca::W)                                                    where W               = _renew!(wca.fval, wca.viol, wca.feas)
-
-# = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = =
-# Extended Functionality of WCSCA
-# = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = =
-include("curvefit.jl"); export decay_fit, guass_fit, lorentz_fit
+include("curvefit.jl")
+include("benchmarkf.jl")

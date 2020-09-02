@@ -1,13 +1,14 @@
-# = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = =
-# Linear Constraint Type Design
-# = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = =
+#=- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+ Linear Constraint Type Design
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -=#
 abstract type AbstractConstraint{T} <: AbstractWCSCA{T} end
 
 struct NoConstraint{T}    <: AbstractConstraint{T} end
 struct LiConstraint{T, U} <: AbstractConstraint{T} a::T; b::T; i::U end # a*x[i] + b
 
 function Base.show(io::IO, c::LiConstraint{T}) where T
-    print(io, "Linear Constraint {", T, "}:", (@sprintf "%7.2f" c.a), " * x[", (@sprintf "%2d" c.i), "] + (", (@sprintf "%4.1f" c.b), ")")
+    print(io, "Linear Constraint {", T, "}:", (@sprintf "%7.2f" c.a),
+          " * x[", (@sprintf "%2d" c.i), "] + (", (@sprintf "%4.1f" c.b), ")")
 end
 
 NoConstraint() = NoConstraint{Float64}()
@@ -33,27 +34,29 @@ resolve_ub(ub::T) where T = ub ≠ 0 ? ( abs(1.0 / ub), -1.0 * sign(ub)) : ( 1.0
     end
 end
 
-LiConstraint(lb::Vector{T}, ub::Vector{T}) where T = LiConstraint(ntuple(x -> lb[x], length(lb)), ntuple(x -> ub[x], length(ub)))
+LiConstraint(lb::Vector{T}, ub::Vector{T}) where T =
+    LiConstraint(ntuple(x -> lb[x], length(lb)), ntuple(x -> ub[x], length(ub)))
 
 # Each individual LiConstraint instance is callable, @code_warntype ✓
-_constraint(c::NoConstraint{T}, m::MT, jdx::U) where {T, U, MT<:AbstractMatrix{T}} = 0.0
-_constraint(c::NoConstraint{T}, v::VT)         where {T, VT<:AbstractVector{T}}    = 0.0
-_constraint(c::LiConstraint{T}, x::T)          where T                             = max(0.0, c.a * x + c.b)
+_constraint(c::NoConstraint{T}, v::Vector{T}) where T = 0.0
+_constraint(c::LiConstraint{T}, x::T)         where T = max(0.0, c.a * x + c.b)
 
-# = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = =
-# Constraints Container Types Design
-# = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = =
+#=- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+ Constraints Container Types Design
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -=#
 struct Constraints{NB, NL, C, T, L<:LiConstraint{T}} <: AbstractConstraint{L}
     box::NTuple{NB, L} # Linear Constraint Tuple (including lower/upper bounds)
     usr::NTuple{NL, C} # Customized Linear/Nonlinear Constraint Functions
 end
 
-Constraints(lb::NTuple{ND,T}, ub::NTuple{ND,T})                    where {C, ND, T}     = Constraints(LiConstraint(lb, ub), (NoConstraint(),))
-Constraints(lb::NTuple{ND,T}, ub::NTuple{ND,T}, usr::NTuple{NL,C}) where {C, ND, NL, T} = Constraints(LiConstraint(lb, ub), usr)
+Constraints(lb::NTuple{ND,T}, ub::NTuple{ND,T}) where {C, ND, T} =
+    Constraints(LiConstraint(lb, ub), (NoConstraint(),))
+Constraints(lb::NTuple{ND,T}, ub::NTuple{ND,T}, usr::NTuple{NL,C}) where {C, ND, NL, T} =
+    Constraints(LiConstraint(lb, ub), usr)
 
 _constraint(c::Constraints, xnew::Vector{T}) where T = _constraint(c.box, c.usr, xnew)
 
-function _constraint(box::NTuple{NB, L}, usr::NTuple{NL, C}, xnew::Vector{T}) where {NB, NL, L, C, T}
+function _constraint(box::NTuple{NB,L}, usr::NTuple{NL,C}, xnew::Vector{T}) where {NB, NL, L, C, T}
     violation = 0.0
 
     @inbounds for i in eachindex(box)
@@ -64,25 +67,6 @@ function _constraint(box::NTuple{NB, L}, usr::NTuple{NL, C}, xnew::Vector{T}) wh
     @inbounds for i in eachindex(usr)
         constraint = usr[i]
         violation += _constraint(constraint, xnew)
-    end
-
-    return violation
-end
-
-_constraint(c::Constraints, xpop::MT, jdx::U) where {T, U, MT<:AbstractMatrix{T}} = _constraint(c.box, c.usr, xpop, jdx)
-
-# @code_warntype ✓
-function _constraint(box::NTuple{NB, L}, usr::NTuple{NL, C}, xpop::MT, jdx::U) where {NB, NL, L, C, T, U, MT<:AbstractMatrix{T}}
-    violation = 0.0
-
-    @inbounds for i in eachindex(box)
-        constraint = box[i]
-        violation += _constraint(constraint, xpop[constraint.i, jdx])
-    end
-
-    @inbounds for i in eachindex(usr)
-        constraint = usr[i]
-        violation += _constraint(constraint, xpop, jdx)
     end
 
     return violation
