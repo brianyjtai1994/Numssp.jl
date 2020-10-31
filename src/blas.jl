@@ -29,7 +29,7 @@ function lup!(lu::Matrix{T}, p::Vector{Int}, A::AbstractMatrix{T}) where T
         lu[idx] = A[idx]
     end
 
-    lup!(lu, p)
+    return lup!(lu, p)
 end
 
 # @code_warntype ✓
@@ -37,6 +37,8 @@ function lup!(lu::Matrix{T}, p::Vector{Int}) where T
     nrow, ncol = size(lu)
 
     @inbounds begin
+        p[end] = ncol
+
         for kdx in 1:ncol # column-wise
             kpiv = kdx # kth column pivot
 
@@ -59,12 +61,14 @@ function lup!(lu::Matrix{T}, p::Vector{Int}) where T
                     @simd for jdx in 1:ncol
                         lu[kdx, jdx], lu[kpiv, jdx] = lu[kpiv, jdx], lu[kdx, jdx]
                     end
+
+                    p[end] += 1
                 end
 
                 # scale first column
                 lukkinv = inv(lu[kdx, kdx])
 
-                if lukkinv == 0.0
+                if lukkinv == zero(T)
                     lukkinv = 1e-40
                 end
 
@@ -74,7 +78,7 @@ function lup!(lu::Matrix{T}, p::Vector{Int}) where T
 
             # matrix is sigular if pivot element is zero
             else
-                error("Sigular matrix")
+                return false # Error: "Sigular matrix"
             end
 
             # update the rest
@@ -83,10 +87,16 @@ function lup!(lu::Matrix{T}, p::Vector{Int}) where T
             end
         end
     end
+
+    return true
 end
 
 # LUP solving linear equations and store results in `x`, @code_warntype ✓
-function lup!(x::AbstractVector{T}, lu::Matrix{T}, p::Vector{Int}) where T
+function la_solve!(x::AbstractVector{T}, A::AbstractMatrix{T}, lu::Matrix{T}, p::Vector{Int}) where T
+    return lup!(lu, p, A) ? la_solve!(x, lu, p) : false
+end
+
+function la_solve!(x::AbstractVector{T}, lu::Matrix{T}, p::Vector{Int}) where T
     nrow, ncol = size(lu)
 
     @inbounds begin
@@ -111,6 +121,18 @@ function lup!(x::AbstractVector{T}, lu::Matrix{T}, p::Vector{Int}) where T
             x[idx] /= lu[idx, idx]
         end
     end
+
+    return true
+end
+
+function det(lu::Matrix{T}, p::Vector{Int}) where T
+    ret = one(T); N = length(p) - 1
+
+    @inbounds for i in 1:N
+        ret *= lu[i, i]
+    end
+
+    return Bool((p[end] - N) & 1) ? -ret : ret
 end
 
 #=
@@ -133,10 +155,10 @@ function inv!(des::AbstractMatrix{T}, src::AbstractMatrix{T}, lu::Matrix{T}, p::
 
     @inbounds for jdx in 1:ncol
         @simd for idx in 1:nrow
-            des[idx, jdx] = ifelse(idx == jdx, T(1.0), T(0.0))
+            des[idx, jdx] = ifelse(idx == jdx, one(T), zero(T))
         end
 
-        lup!(view(des, :, jdx), lu, p)
+        la_solve!(view(des, :, jdx), lu, p)
     end
 end
 
@@ -146,13 +168,17 @@ end
  - tAXnB : A'⋅B
  - nAXnV : A ⋅V
  - tAXnV : A'⋅V
+ - tVXnV : V'⋅V
+ - nVXtV : V ⋅V'
+
+ - tVXnAXnV : V'⋅A⋅V
 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -=#
 function nAXnB!(matC::AbstractMatrix{T}, matA::AbstractMatrix{T}, matB::AbstractMatrix{T}) where T
     # matA ∈ m*n, matB ∈ n*p, matC ∈ m*p
     m, p = size(matC); n = size(matA, 2)
 
     @inbounds for jdx in 1:p, idx in 1:m
-        temp = T(0.0)
+        temp = zero(T)
 
         for kdx in 1:n
             temp += matA[idx, kdx] * matB[kdx, jdx]
@@ -167,7 +193,7 @@ function tAXnB!(matC::AbstractMatrix{T}, matA::AbstractMatrix{T}, matB::Abstract
     m, p = size(matC); n = size(matA, 1)
 
     @inbounds for jdx in 1:p, idx in 1:m
-        temp = T(0.0)
+        temp = zero(T)
 
         for kdx in 1:n
             temp += matA[kdx, idx] * matB[kdx, jdx]
@@ -181,7 +207,7 @@ function nAXnV!(vecC::AbstractVector{T}, matA::AbstractMatrix{T}, vecB::Abstract
     nrow, ncol = size(matA)
 
     @inbounds for idx in 1:nrow
-        temp = T(0.0)
+        temp = zero(T)
 
         for jdx in 1:ncol
             temp += matA[idx, jdx] * vecB[jdx]
@@ -195,7 +221,7 @@ function tAXnV!(vecC::AbstractVector{T}, matA::AbstractMatrix{T}, vecB::Abstract
     nrow, ncol = size(matA)
 
     @inbounds for idx in 1:ncol
-        temp = T(0.0)
+        temp = zero(T)
 
         for jdx in 1:nrow
             temp += matA[jdx, idx] * vecB[jdx]
@@ -203,4 +229,34 @@ function tAXnV!(vecC::AbstractVector{T}, matA::AbstractMatrix{T}, vecB::Abstract
 
         vecC[idx] = temp
     end
+end
+
+function tVXnV(vecA::AbstractVector{T}, vecB::AbstractVector{T}) where T
+    ret = zero(T)
+
+    @inbounds for idx in eachindex(vecA)
+        ret += vecA[idx] * vecB[idx]
+    end
+
+    return ret
+end
+
+function nVXtV!(matC::AbstractMatrix{T}, vecA::AbstractVector{T}, vecB::AbstractVector{T}) where T
+    nrow = length(vecA); ncol = length(vecB)
+
+    @inbounds for jdx in 1:ncol
+        @simd for idx in 1:nrow
+            matC[idx, jdx] = vecA[idx] * vecB[jdx]
+        end
+    end
+end
+
+function tVXnAXnV(v::AbstractVector, m::AbstractMatrix{T}) where T
+    n = length(v); ret = zero(T)
+
+    @inbounds for jdx in 1:n, idx in 1:n
+        ret += v[idx] * m[idx, jdx] * v[jdx]
+    end
+
+    return ret
 end
